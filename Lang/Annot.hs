@@ -12,23 +12,9 @@ import Data.Semigroup
 
 import Text.Megaparsec.Pos
 
-import Lang.Fix
-
-data AnnotF ann f e =
-  Annot ann (f e)
-  deriving (Show, Functor)
-
 class Annot n where
   type Ann n
   getAnn :: n -> Ann n
-
-instance Annot (AnnotF ann f e) where
-  type Ann (AnnotF ann f e) = ann
-  getAnn (Annot ann _) = ann
-
-instance (Annot (f (F f))) => Annot (F f) where
-  type Ann (F f) = Ann (f (F f))
-  getAnn (In ann) = getAnn ann
 
 instance Annot (ann, a) where
   type Ann (ann, a) = ann

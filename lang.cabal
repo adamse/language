@@ -48,7 +48,10 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Lang.Annot, Lang.Fix, Lang.Lexer
+  exposed-modules: Lang.Annot
+                 , Lang.Lexer
+                 , Lang.Parser
+                 , Lang.Syntax
 
   -- Modules included in this library but not exported.
   -- other-modules:
