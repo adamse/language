@@ -14,12 +14,16 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
+-- containers
+import qualified Data.Set as Set
+
 -- base
 import           Control.Applicative ((<|>), empty)
 import           Data.Void (Void)
 import           Prelude hiding (lex)
 import           Data.Proxy (Proxy(..))
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NE
 
 -- language
 import           Lang.Annot
@@ -32,6 +36,9 @@ data PositionedToken = PToken
 instance Annot PositionedToken where
   type Ann PositionedToken = Span
   getAnn = ptSpan
+
+instance P.ShowToken PositionedToken where
+  showTokens = Text.unpack . prettyPTokens . NE.toList
 
 prettyPToken :: PositionedToken -> Text
 prettyPToken = prettyToken . ptToken
@@ -47,11 +54,11 @@ data Token
   | Equals
   | Backslash
   | Colon
+  | Dot
   | HoleLit Text
   | StringLit Text
   | LName Text
-  | IntLit Integer
-  | FloatLit Double
+  | NumLit (Either Integer Double)
   deriving (Show, Eq, Ord)
 
 prettyToken :: Token -> Text
@@ -62,11 +69,11 @@ prettyToken t = case t of
   Equals -> "="
   Backslash -> "\\"
   Colon -> ":"
+  Dot -> "."
   HoleLit l -> Text.cons '?' l
   StringLit l -> Text.pack $ show l
   LName n -> n
-  IntLit i -> Text.pack $ show i
-  FloatLit i -> Text.pack $ show i
+  NumLit n ->  Text.pack $ either show show n
 
 type Lexer = P.Parsec Void Text
 type Parser = P.Parsec Void [PositionedToken]
@@ -93,7 +100,7 @@ lex = P.some lexToken
 
 testLexer :: Lexer a -> Text -> a
 testLexer lexer i =
-  either (error . P.parseErrorPretty) id (P.runParser lexer "" i)
+  either (error . P.parseErrorPretty' i) id (P.runParser lexer "" i)
 
 spaceL :: Lexer ()
 spaceL = L.space P.space1 empty empty
@@ -118,11 +125,11 @@ tokenL = P.choice
   , P.try $ P.string "=" *> pure Equals
   , P.try $ P.string "\\" *> pure Backslash
   , P.try $ P.string ":" *> pure Colon
+  , P.try $ P.string "." *> pure Dot
   , HoleLit <$> P.try holeLit
+  , NumLit <$> P.try numP
   , LName <$> lnameP
   , StringLit <$> P.try stringLit
-  , FloatLit <$> P.try floatLit
-  , IntLit <$> P.try intLit
   ]
   where
     -- todo: extend to support all symbols here.
@@ -130,7 +137,46 @@ tokenL = P.choice
     identStart = P.alphaNumChar
 
     holeLit = P.char '?' *> (Text.pack <$> P.some identLetter)
+
     lnameP = Text.cons <$> identStart <*> (Text.pack <$> P.many identLetter)
+
     stringLit = P.char '"' *> (Text.pack <$> P.manyTill L.charLiteral (P.char '"'))
-    intLit = L.decimal
-    floatLit = L.float
+
+    numP = ((Right <$> P.try L.float) <|>
+            (Left <$> P.try L.decimal))
+           P.<?>
+           "number"
+
+anyToken :: Parser PositionedToken
+anyToken = P.anyChar
+
+token :: (Token -> Maybe a) -> Parser a
+token f = P.token g Nothing
+  where
+    g pt = case f (ptToken pt) of
+      Just a -> pure a
+      Nothing -> Left (pure (P.Tokens (pt NE.:| [])), Set.empty)
+
+match :: Token -> Parser PositionedToken
+match t = P.satisfy ((== t) . ptToken)
+
+lparenP :: Parser PositionedToken
+lparenP = match LParen
+
+rparenP :: Parser PositionedToken
+rparenP = match RParen
+
+larrowP :: Parser PositionedToken
+larrowP = match LArrow
+
+equalsP :: Parser PositionedToken
+equalsP = match Equals
+
+backslashP :: Parser PositionedToken
+backslashP = match Backslash
+
+colonP :: Parser PositionedToken
+colonP = match Colon
+
+dotP :: Parser PositionedToken
+dotP = match Dot
