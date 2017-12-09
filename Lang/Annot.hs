@@ -30,6 +30,10 @@ instance (Annot (f (F f))) => Annot (F f) where
   type Ann (F f) = Ann (f (F f))
   getAnn (In ann) = getAnn ann
 
+instance Annot (ann, a) where
+  type Ann (ann, a) = ann
+  getAnn = fst
+
 data Span
   = Span { spStart :: SourcePos, spEnd :: SourcePos }
   deriving (Show, Eq, Ord)

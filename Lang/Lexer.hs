@@ -1,9 +1,34 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 -- |
-module Lang.Lexer where
+module Lang.Lexer
+  ( PositionedToken(..)
+  , prettyPToken
+  , prettyPTokens
+  , Token(..)
+  , prettyToken
+  , Lexer
+  , testLexer
+  , lex
+  , lexToken
+  , Parser
+  , testParser
+  , anyToken
+  , lparenP
+  , rparenP
+  , parenP
+  , larrowP
+  , equalsP
+  , backslashP
+  , colonP
+  , dotP
+  , numP
+  , lnameP
+  , lnameP'
+  , stringP
+  , holeP
+  ) where
 
 -- megaparsec
 import qualified Text.Megaparsec as P
@@ -78,6 +103,7 @@ prettyToken t = case t of
 type Lexer = P.Parsec Void Text
 type Parser = P.Parsec Void [PositionedToken]
 
+
 instance P.Stream [PositionedToken] where
   type Token [PositionedToken] = PositionedToken
   type Tokens [PositionedToken] = [PositionedToken]
@@ -101,6 +127,11 @@ lex = P.some lexToken
 testLexer :: Lexer a -> Text -> a
 testLexer lexer i =
   either (error . P.parseErrorPretty' i) id (P.runParser lexer "" i)
+
+testParser :: Parser a -> [PositionedToken] -> a
+testParser lexer i =
+  either (error . P.parseErrorPretty) id (P.runParser lexer "" i)
+
 
 spaceL :: Lexer ()
 spaceL = L.space P.space1 empty empty
@@ -150,12 +181,15 @@ tokenL = P.choice
 anyToken :: Parser PositionedToken
 anyToken = P.anyChar
 
-token :: (Token -> Maybe a) -> Parser a
-token f = P.token g Nothing
+token' :: (PositionedToken -> Maybe a) -> Parser a
+token' f = P.token g Nothing
   where
-    g pt = case f (ptToken pt) of
+    g pt = case f pt of
       Just a -> pure a
       Nothing -> Left (pure (P.Tokens (pt NE.:| [])), Set.empty)
+
+-- token :: (Token -> Maybe a) -> Parser a
+-- token f = token' (f . ptToken)
 
 match :: Token -> Parser PositionedToken
 match t = P.satisfy ((== t) . ptToken)
@@ -165,6 +199,13 @@ lparenP = match LParen
 
 rparenP :: Parser PositionedToken
 rparenP = match RParen
+
+parenP :: Parser a -> Parser (PositionedToken, PositionedToken, a)
+parenP p = do
+  open <- lparenP
+  a <- p
+  close <- rparenP
+  pure (open, close, a)
 
 larrowP :: Parser PositionedToken
 larrowP = match LArrow
@@ -180,3 +221,29 @@ colonP = match Colon
 
 dotP :: Parser PositionedToken
 dotP = match Dot
+
+numP :: Parser (Span, Either Integer Double)
+numP = token' $ \pt -> case ptToken pt of
+  NumLit l -> Just (ptSpan pt, l)
+  _ -> Nothing
+
+lnameP :: Parser (Span, Text)
+lnameP = token' $ \pt -> case ptToken pt of
+  LName t -> Just (ptSpan pt, t)
+  _ -> Nothing
+
+lnameP' :: Text -> Parser PositionedToken
+lnameP' t1 = token' $ \pt -> case ptToken pt of
+  LName t2
+    | t1 == t2 -> Just pt
+  _ -> Nothing
+
+stringP :: Parser (Span, Text)
+stringP = token' $ \pt -> case ptToken pt of
+  StringLit l -> Just (ptSpan pt, l)
+  _ -> Nothing
+
+holeP :: Parser (Span, Text)
+holeP = token' $ \pt -> case ptToken pt of
+  HoleLit t -> Just (ptSpan pt, t)
+  _ -> Nothing
