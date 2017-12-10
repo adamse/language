@@ -74,7 +74,7 @@ nonAppP =
       ]
     absp = do
       lam <- backslashP
-      name <- lnameP
+      name <- identP
       arr <- larrowP
       bod <- termP
       pure $ Abs
@@ -82,19 +82,19 @@ nonAppP =
         name
         bod
     letp = do
-      lets <- lnameP' "let"
-      name <- lnameP
+      lets <- ridentP "let"
+      name <- identP
       eqs <- equalsP
       bound <- termP
-      ins <- lnameP' "in"
+      ins <- ridentP "in"
       bod <- termP
       pure $ Let
         (ParserAnn (getSpan lets <> getSpan bod) (Set.singleton (LetAnn lets eqs ins)))
         name
         bound
         bod
-    identp = do
-      name <- lnameP
+    identp = P.try $ do
+      name <- identP
       pure $ Ident
         (ParserAnn (getSpan name) Set.empty)
         name

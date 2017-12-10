@@ -25,31 +25,28 @@ module Lang.Lexer
   , dotP
   , commaP
   , numP
-  , lnameP
-  , lnameP'
   , stringP
   , holeP
+  , lnameP
+  , lnameP'
+  , identP
+  , ridentP
   ) where
 
--- megaparsec
+import           Control.Applicative ((<|>), empty)
+import           Control.Monad (when)
+import qualified Data.List as List
+import qualified Data.List.NonEmpty as NE
+import           Data.Proxy (Proxy(..))
+import           Data.Semigroup ((<>))
+import qualified Data.Set as Set
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import           Data.Void (Void)
+import           Prelude hiding (lex)
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
-
--- text
-import           Data.Text (Text)
-import qualified Data.Text as Text
-
--- containers
-import qualified Data.Set as Set
-
--- base
-import           Control.Applicative ((<|>), empty)
-import           Data.Void (Void)
-import           Prelude hiding (lex)
-import           Data.Proxy (Proxy(..))
-import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
 
 -- language
 import           Lang.Annot
@@ -232,6 +229,16 @@ numP = token' $ \pt -> case ptToken pt of
   NumLit l -> Just (ptSpan pt, l)
   _ -> Nothing
 
+stringP :: Parser (Span, Text)
+stringP = token' $ \pt -> case ptToken pt of
+  StringLit l -> Just (ptSpan pt, l)
+  _ -> Nothing
+
+holeP :: Parser (Span, Text)
+holeP = token' $ \pt -> case ptToken pt of
+  HoleLit t -> Just (ptSpan pt, t)
+  _ -> Nothing
+
 lnameP :: Parser (Span, Text)
 lnameP = token' $ \pt -> case ptToken pt of
   LName t -> Just (ptSpan pt, t)
@@ -243,12 +250,18 @@ lnameP' t1 = token' $ \pt -> case ptToken pt of
     | t1 == t2 -> Just pt
   _ -> Nothing
 
-stringP :: Parser (Span, Text)
-stringP = token' $ \pt -> case ptToken pt of
-  StringLit l -> Just (ptSpan pt, l)
-  _ -> Nothing
+reserved :: [Text]
+reserved =
+  [ "let"
+  , "in"
+  ]
 
-holeP :: Parser (Span, Text)
-holeP = token' $ \pt -> case ptToken pt of
-  HoleLit t -> Just (ptSpan pt, t)
-  _ -> Nothing
+identP :: Parser (Span, Text)
+identP = do
+  n <- lnameP
+  when (snd n `elem` reserved) $
+    fail $ Text.unpack (snd n) <> " cannot be an identifier"
+  pure n
+
+ridentP :: Text -> Parser PositionedToken
+ridentP = lnameP'
