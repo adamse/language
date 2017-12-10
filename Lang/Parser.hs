@@ -29,7 +29,7 @@ data ParserAnn =
   ParserAnn
   { paSpan :: Span
   , paMore :: Set ExtraAnn
-  }
+  } deriving (Show, Eq)
 
 addMore :: ExtraAnn -> ParserAnn -> ParserAnn
 addMore e ann = ann { paMore = Set.insert e $ paMore ann }
@@ -50,7 +50,7 @@ parse = termP
 
 {-# INLINEABLE termP #-}
 termP :: Parser ParserTerm
-termP = foldApp <$> P.many nonAppP
+termP = foldApp <$> P.some nonAppP
   where
     foldApp = foldl1 $ \t1 t2 ->
       App (getAnn t1 <> getAnn t2) t1 t2
@@ -58,7 +58,7 @@ termP = foldApp <$> P.many nonAppP
 {-# INLINE nonAppP #-}
 nonAppP :: Parser ParserTerm
 nonAppP =
-  P.try parented
+  parented
   <|>
   term
   where
@@ -66,10 +66,11 @@ nonAppP =
       (open, close, t) <- parenP termP
       pure $ fmap (addMore (ParenAnn open close)) t
     term = P.choice
-      [ P.try absp
-      , P.try letp
-      , P.try identp
-      , P.try holep
+      [ absp
+      , letp
+      , holep
+      , numberp
+      , identp
       ]
     absp = do
       lam <- backslashP
@@ -102,3 +103,8 @@ nonAppP =
       pure $ Hole
         (ParserAnn (getSpan hole) Set.empty)
         hole
+    numberp = do
+      (sp, n) <- numP
+      pure $ Number
+        (ParserAnn sp Set.empty)
+        n

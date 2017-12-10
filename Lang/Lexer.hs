@@ -23,6 +23,7 @@ module Lang.Lexer
   , backslashP
   , colonP
   , dotP
+  , commaP
   , numP
   , lnameP
   , lnameP'
@@ -80,6 +81,7 @@ data Token
   | Backslash
   | Colon
   | Dot
+  | Comma
   | HoleLit Text
   | StringLit Text
   | LName Text
@@ -95,6 +97,7 @@ prettyToken t = case t of
   Backslash -> "\\"
   Colon -> ":"
   Dot -> "."
+  Comma -> ","
   HoleLit l -> Text.cons '?' l
   StringLit l -> Text.pack $ show l
   LName n -> n
@@ -102,7 +105,6 @@ prettyToken t = case t of
 
 type Lexer = P.Parsec Void Text
 type Parser = P.Parsec Void [PositionedToken]
-
 
 instance P.Stream [PositionedToken] where
   type Token [PositionedToken] = PositionedToken
@@ -132,7 +134,6 @@ testParser :: Parser a -> [PositionedToken] -> a
 testParser lexer i =
   either (error . P.parseErrorPretty) id (P.runParser lexer "" i)
 
-
 spaceL :: Lexer ()
 spaceL = L.space P.space1 empty empty
 
@@ -157,6 +158,7 @@ tokenL = P.choice
   , P.try $ P.string "\\" *> pure Backslash
   , P.try $ P.string ":" *> pure Colon
   , P.try $ P.string "." *> pure Dot
+  , P.try $ P.string "," *> pure Comma
   , HoleLit <$> P.try holeLit
   , NumLit <$> P.try numP
   , LName <$> lnameP
@@ -221,6 +223,9 @@ colonP = match Colon
 
 dotP :: Parser PositionedToken
 dotP = match Dot
+
+commaP :: Parser PositionedToken
+commaP = match Comma
 
 numP :: Parser (Span, Either Integer Double)
 numP = token' $ \pt -> case ptToken pt of
